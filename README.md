@@ -1,2 +1,2 @@
 # task-actor
-Actor model using simple tokio tasts
+Actor model using simple tokio tasks
