@@ -1,0 +1,10 @@
+[package]
+name = "task-actor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "*"
+futures = "*"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "*"
