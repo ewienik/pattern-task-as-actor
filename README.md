@@ -4,7 +4,6 @@ Actor model using simple tokio tasks
 # usage
 
 ```
-cargo build
 cargo r
 ```
 
@@ -12,7 +11,7 @@ cargo r
 
 There are three actors:
 - Supervisor: stores and stops handles to all actors
-- Ping: sends pong to Pong and stops Supervisor when after 10 balls
+- Ping: sends pong to Pong and stops Supervisor after 10 balls
 - Pong: sends ping to Ping
 
 ## License
