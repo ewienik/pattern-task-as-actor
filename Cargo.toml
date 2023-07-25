@@ -7,3 +7,6 @@ edition = "2021"
 async-trait = "*"
 futures = "*"
 tokio = { version = "*", features = ["full"] }
+
+[dev-dependencies]
+mockall = "*"
