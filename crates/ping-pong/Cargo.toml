@@ -1,0 +1,12 @@
+[package]
+name = "ping-pong"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actor.workspace = true
+supervisor.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+mockall.workspace = true

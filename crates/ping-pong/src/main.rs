@@ -1,79 +1,10 @@
 use {
+    actor::{ActorHandle, ActorStop, MessageStop},
     ping::{Ping, PingExt},
     pong::{Pong, PongExt},
-    supervisor::{Supervisor, SupervisorExt},
-    tokio::{sync::mpsc::Sender, task::JoinHandle},
+    supervisor::{self, Supervisor, SupervisorExt},
+    tokio::sync::mpsc::Sender,
 };
-
-pub type ActorHandle = JoinHandle<()>;
-
-#[async_trait::async_trait]
-pub trait Stop {
-    async fn stop(&self);
-}
-
-mod supervisor {
-    use {
-        super::*,
-        futures::{future, stream, StreamExt},
-        tokio::sync::mpsc,
-    };
-
-    pub enum Supervisor {
-        Attach {
-            actor: Box<dyn Stop + Send + Sync>,
-            handle: ActorHandle,
-        },
-        Stop,
-    }
-
-    #[async_trait::async_trait]
-    pub trait SupervisorExt: Stop {
-        async fn attach(&self, actor: Box<dyn Stop + Send + Sync>, handle: ActorHandle);
-    }
-
-    #[async_trait::async_trait]
-    impl SupervisorExt for Sender<Supervisor> {
-        async fn attach(&self, actor: Box<dyn Stop + Send + Sync>, handle: ActorHandle) {
-            self.send(Supervisor::Attach { actor, handle })
-                .await
-                .unwrap();
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl Stop for Sender<Supervisor> {
-        async fn stop(&self) {
-            self.send(Supervisor::Stop).await.unwrap();
-        }
-    }
-
-    pub fn new() -> (Sender<Supervisor>, ActorHandle) {
-        let (tx, mut rx) = mpsc::channel(10);
-        let task = tokio::spawn(async move {
-            println!("supervisor: start task");
-            let mut actors = Vec::new();
-            let mut handles = Vec::new();
-            while let Some(msg) = rx.recv().await {
-                match msg {
-                    Supervisor::Attach { actor, handle } => {
-                        actors.push(actor);
-                        handles.push(handle);
-                    }
-                    Supervisor::Stop => rx.close(),
-                }
-            }
-            stream::iter(actors.into_iter())
-                .for_each(|actor| async move {
-                    actor.stop().await;
-                })
-                .await;
-            future::join_all(handles.into_iter()).await;
-            println!("supervisor: finish task");
-        });
-        (tx, task)
-    }
-}
 
 mod ping {
     use {super::*, tokio::sync::mpsc};
@@ -84,13 +15,11 @@ mod ping {
         Stop,
     }
 
-    #[async_trait::async_trait]
-    pub trait PingExt: Stop {
+    pub trait PingExt {
         async fn start(&self, pong: Sender<Pong>);
         async fn ping(&self);
     }
 
-    #[async_trait::async_trait]
     impl PingExt for Sender<Ping> {
         async fn start(&self, pong: Sender<Pong>) {
             self.send(Ping::Start { pong }).await.unwrap();
@@ -101,10 +30,9 @@ mod ping {
         }
     }
 
-    #[async_trait::async_trait]
-    impl Stop for Sender<Ping> {
-        async fn stop(&self) {
-            self.send(Ping::Stop).await.unwrap();
+    impl MessageStop for Ping {
+        fn message_stop() -> Self {
+            Ping::Stop
         }
     }
 
@@ -126,7 +54,7 @@ mod ping {
                             counter += 1;
                             if counter == 10 {
                                 println!("done");
-                                supervisor.stop().await;
+                                supervisor.actor_stop().await;
                             } else {
                                 print!("ping..");
                                 my_pong.as_ref().unwrap().pong().await;
@@ -152,22 +80,19 @@ mod pong {
         Stop,
     }
 
-    #[async_trait::async_trait]
-    pub trait PongExt: Stop {
+    pub trait PongExt {
         async fn pong(&self);
     }
 
-    #[async_trait::async_trait]
     impl PongExt for Sender<Pong> {
         async fn pong(&self) {
             self.send(Pong::Pong).await.unwrap();
         }
     }
 
-    #[async_trait::async_trait]
-    impl Stop for Sender<Pong> {
-        async fn stop(&self) {
-            self.send(Pong::Stop).await.unwrap();
+    impl MessageStop for Pong {
+        fn message_stop() -> Self {
+            Pong::Stop
         }
     }
 
@@ -227,9 +152,9 @@ async fn main() {
 async fn run(facade: impl Facade) {
     let (supervisor, supervisor_task) = facade.new_supervisor();
     let (ping, ping_task) = facade.new_ping(supervisor.clone());
-    supervisor.attach(Box::new(ping.clone()), ping_task).await;
+    supervisor.attach(ping.clone(), ping_task).await;
     let (pong, pong_task) = facade.new_pong(ping.clone());
-    supervisor.attach(Box::new(pong.clone()), pong_task).await;
+    supervisor.attach(pong.clone(), pong_task).await;
     ping.start(pong).await;
     supervisor_task.await.unwrap();
 }

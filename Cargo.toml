@@ -1,12 +1,13 @@
-[package]
-name = "task-actor"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = ["crates/*"]
+resolver = "2"
 
-[dependencies]
-async-trait = "*"
+[workspace.dependencies]
+actor = { path = "crates/actor" }
 futures = "*"
+supervisor = { path = "crates/supervisor" }
 tokio = { version = "*", features = ["full"] }
-
-[dev-dependencies]
 mockall = "*"
+
+[profile.dev]
+debug = "limited"
